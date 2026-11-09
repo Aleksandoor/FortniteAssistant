@@ -1,163 +1,127 @@
 
-import time
-import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox
+import time
 
-import cv2
-import numpy as np
-import pyautogui
-import ctypes
-
-pyautogui.FAILSAFE = True
-
-class FortniteAssistant:
+class KeyboardTester:
     def __init__(self, root):
         self.root = root
-        self.root.title("Fortnite Assistant")
-        self.root.geometry("440x300")
+        self.root.title("Fortnite Assistant 2.0")
+        self.root.geometry("460x440")
+        self.root.resizable(False, False)
 
-        self.running = False
-        self.paused = False
-        self.template = None
-        self.last_click = 0
+        self.pressed = set()
+        self.running = True
 
         tk.Label(
-            root, text="FORTNITE ASSISTANT",
-            font=("Arial", 17, "bold")
+            root,
+            text="FORTNITE ASSISTANT 2.0",
+            font=("Arial", 18, "bold")
         ).pack(pady=15)
 
         self.status = tk.Label(
-            root, text="Ожидание",
+            root, text="ТЕСТ КЛАВИАТУРЫ",
             font=("Arial", 12)
         )
-        self.status.pack(pady=10)
+        self.status.pack(pady=5)
 
-        tk.Button(
-            root, text="Выбрать кнопку ИГРАТЬ",
-            command=self.choose_template, width=30
-        ).pack(pady=7)
-
-        tk.Button(
-            root, text="СТАРТ",
-            command=self.start, width=30
-        ).pack(pady=7)
-
-        tk.Button(
-            root, text="ПАУЗА (F7)",
-            command=self.pause, width=30
-        ).pack(pady=7)
-
-        tk.Button(
-            root, text="СТОП (F8)",
-            command=self.stop, width=30
-        ).pack(pady=7)
-
-        self.info = tk.Label(root, text="Выбери изображение кнопки")
-        self.info.pack(pady=10)
-
-        threading.Thread(
-            target=self.hotkeys, daemon=True
-        ).start()
-
-    def choose_template(self):
-        path = filedialog.askopenfilename(
-            filetypes=[("Images", "*.png *.jpg *.jpeg")]
+        self.keys = tk.Label(
+            root,
+            text="W     A     S     D\n\nSPACE",
+            font=("Arial", 23, "bold"),
+            justify="center"
         )
-        if path:
-            self.template = cv2.imread(path)
-            self.info.config(text="Шаблон загружен!")
+        self.keys.pack(pady=20)
 
-    def start(self):
-        if self.template is None:
-            messagebox.showwarning(
-                "Ошибка", "Сначала выбери изображение кнопки!"
-            )
-            return
+        tk.Label(
+            root,
+            text="Нажимай клавиши на клавиатуре",
+            font=("Arial", 11)
+        ).pack(pady=5)
 
-        if not self.running:
-            self.running = True
-            self.paused = False
-            threading.Thread(
-                target=self.loop, daemon=True
-            ).start()
+        tk.Label(
+            root,
+            text="Длительность теста (секунды):"
+        ).pack(pady=5)
 
-    def pause(self):
+        self.duration = tk.IntVar(value=5)
+
+        tk.Scale(
+            root,
+            from_=1,
+            to=15,
+            orient="horizontal",
+            variable=self.duration,
+            length=260
+        ).pack()
+
+        tk.Button(
+            root,
+            text="НАЧАТЬ ТЕСТ",
+            width=25,
+            command=self.start_test
+        ).pack(pady=8)
+
+        tk.Button(
+            root,
+            text="СТОП",
+            width=25,
+            command=self.stop_test
+        ).pack(pady=5)
+
+        self.result = tk.Label(
+            root, text="Ожидание",
+            font=("Arial", 11)
+        )
+        self.result.pack(pady=12)
+
+        self.root.bind("<KeyPress>", self.key_down)
+        self.root.bind("<KeyRelease>", self.key_up)
+        self.root.focus_force()
+
+    def key_down(self, event):
+        key = event.keysym.upper()
+        self.pressed.add(key)
+        self.update_keys()
+
+    def key_up(self, event):
+        key = event.keysym.upper()
+        self.pressed.discard(key)
+        self.update_keys()
+
+    def update_keys(self):
+        names = ["W", "A", "S", "D", "SPACE"]
+        active = [
+            key for key in names
+            if key in self.pressed
+            or (key == "SPACE" and "SPACE" in self.pressed)
+        ]
+
+        self.keys.config(
+            text="   ".join(active) if active else
+            "W     A     S     D\n\nSPACE"
+        )
+
+    def start_test(self):
+        self.running = True
+        self.status.config(text="ТЕСТ АКТИВЕН")
+        self.result.config(
+            text=f"Длительность: {self.duration.get()} сек."
+        )
+        self.root.after(
+            self.duration.get() * 1000,
+            self.finish_test
+        )
+
+    def finish_test(self):
         if self.running:
-            self.paused = not self.paused
-            self.status.config(
-                text="Пауза" if self.paused else "Работает"
-            )
+            self.status.config(text="ТЕСТ ЗАВЕРШЁН")
+            self.result.config(text="Проверка окончена")
 
-    def stop(self):
+    def stop_test(self):
         self.running = False
-        self.paused = False
-        self.status.config(text="Остановлено")
-
-    def hotkeys(self):
-        user32 = ctypes.windll.user32
-        old7 = old8 = False
-
-        while True:
-            f7 = bool(user32.GetAsyncKeyState(0x76) & 0x8000)
-            f8 = bool(user32.GetAsyncKeyState(0x77) & 0x8000)
-
-            if f7 and not old7:
-                self.root.after(0, self.pause)
-
-            if f8 and not old8:
-                self.root.after(0, self.stop)
-
-            old7, old8 = f7, f8
-            time.sleep(0.12)
-
-    def loop(self):
-        while self.running:
-            if self.paused:
-                time.sleep(0.3)
-                continue
-
-            try:
-                screen = cv2.cvtColor(
-                    np.array(pyautogui.screenshot()),
-                    cv2.COLOR_RGB2BGR
-                )
-
-                h, w = self.template.shape[:2]
-
-                if h <= screen.shape[0] and w <= screen.shape[1]:
-                    result = cv2.matchTemplate(
-                        screen, self.template,
-                        cv2.TM_CCOEFF_NORMED
-                    )
-
-                    _, confidence, _, location = cv2.minMaxLoc(result)
-
-                    if confidence >= 0.88:
-                        if time.time() - self.last_click > 20:
-                            x = location[0] + w // 2
-                            y = location[1] + h // 2
-                            pyautogui.click(x, y)
-                            self.last_click = time.time()
-                            self.root.after(
-                                0, lambda: self.info.config(
-                                    text="Кнопка Играть нажата"
-                                )
-                            )
-                    else:
-                        self.root.after(
-                            0, lambda: self.info.config(
-                                text="Ожидание кнопки Играть"
-                            )
-                        )
-
-            except Exception as e:
-                self.root.after(
-                    0, lambda: self.info.config(text=str(e))
-                )
-
-            time.sleep(2)
+        self.status.config(text="ОСТАНОВЛЕНО")
+        self.result.config(text="Тест остановлен")
 
 root = tk.Tk()
-app = FortniteAssistant(root)
+app = KeyboardTester(root)
 root.mainloop()
